@@ -6,11 +6,13 @@ from sklearn.preprocessing import MinMaxScaler, RobustScaler, StandardScaler
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.decomposition import PCA
+from sklearn.feature_selection import SelectKBest
+from sklearn.feature_selection import chi2
 warnings.filterwarnings(action='ignore')
 
 
 df = pd.read_csv('Dataset_1.csv')
-r_scaler = RobustScaler()
+
 # Object Selection--> Discriminate Churn
 # Discrimination based on all data and categorical data
 ###################################################################################33
@@ -19,48 +21,74 @@ r_scaler = RobustScaler()
 def ScalingData(data, scaler):
     df_scaled = scaler.fit_transform(data)
     return df_scaled
+
 # Function to output na value for each column
 def foundNan(df):
     print(df.isna().sum())
 
+# Encoding String value to Numeric Value
 def columnEncoding(col,df):
     for c in col:
+        # get All distinguish Value of column
         c_unique = df[c].unique()
         print(c_unique)
         encoder = LabelEncoder()
         encoder.fit(df[c])
         df[c] = encoder.transform(df[c])
         result_unique = df[c].unique()
-        print("%s is replaced %s"%(c_unique,result_unique))
+        print("%s is replaced %s"%(c_unique,result_unique)) # print replaced label compared origin label
     return df
+
 # Part that determines how to handle na value of dataframe
 def handleNa(col, df,work="mean"):
+    # fill na value for 'mean'
     if work=="mean":
         for c in col:
             mean = df[c].mean()
             df[c]=df[c].fillna(mean)
+    # fill na value for 'median'
     elif work=="median":
         for c in col:
             median = df[c].median()
             df[c]=df[c].fillna(median)
+    # fill na value for 'mode'
     elif work=="mode":
         for c in col:
             mode = df[c].mode()[0]
             df[c]=df[c].fillna(mode)
+    # drop row which contains na value
     elif work=="drop":
         df = df.dropna(subset=col)
     return df
+# print K_best value of data.
+# Data divided into categorical data can also be checked
+#######################################
+def select_k_best(df):
+    X = df.iloc[:,:-1]
+    Y = df.iloc[:,-1]
+    # Num of Top feature select...
+    bestFeatures = SelectKBest(score_func=chi2, k='all')
+    fit = bestFeatures.fit(X, Y)
+    dfColumns = pd.DataFrame(X.columns)
+    dfscores = pd.DataFrame(fit.scores_)
+    featureScores = pd.concat([dfColumns, dfscores], axis=1)
+    featureScores.columns = ['Specs', 'Score']
+    print(featureScores.nlargest(12, 'Score'))
+
 
 print('--------------------------------------------------------------------------')
 print(df.info())#info 출력을 통해 대략적 정보를 얻음.
-
+print(df)
 # Check if there are outliers through the plot.
 # There were no outliers in this project.
+##################################################
 def plotSeries(data,key):
     plt.title(key)
     plt.hist(data[key])
     plt.show()
-
+# split_df split data by specific categorical value
+# current deprecated
+###################################################
 def split_df(data,standard):
     std_list = data[standard].unique()
     data_list = []
@@ -68,15 +96,21 @@ def split_df(data,standard):
         data_list.append(data[data==s])
     return data_list
 
-split_df(df, 'Gender')
-foundNan(df)#nan이 존재, Endcoding이 불가능한 값은 최빈값으로 대체 (카테고리컬 값은)
+# deprecated
+###################################################
+def visualization(data):
+    print(data)
+
+split_df(df, 'Gender') # split data by gender of customer
+foundNan(df)#nan exists, endcoding is impossible, and the value is replaced by the mode (categorical value)
 
 
 
 df=df.drop(['Unnamed: 0','Surname'],axis=1)
-# outlier는 데이터의 통계 값에 큰 영향을 미칠 수 있기 때문에 drop을 수행한다.
-# table 전체를 drop 방식으로 handle na 한다면, 다른 column의 값이 na일 때 다른 row까지 drop되고 만다.
-# 때문에 drop은 하나의 Column에 각각 수행해 준다.
+# Since outlier can have a big influence on the statistical value of data, drop is performed.
+# If you handle na the entire table by drop method, when the value of another column is na, it is dropped to another row.
+#Because, drop is performed on one column each.
+df = handleNa(['Exited'],df,"drop")
 is_plot=False
 if is_plot:
     for k in df:
@@ -92,24 +126,9 @@ for c in df:
     print('----------------------------------------')
 print('----------------------------------------')
 df = columnEncoding(['Geography','Gender'],df)#Encoding을 통해 String vlaue를 제거
-'''
-df = handleNa(df.columns,df,work="mean") # 나머지 value들 mean으로 fillna
-foundNan(df)
 
-X = df.iloc[:,:-1]
-Y = df.iloc[:,-1]
-X = pd.DataFrame(ScalingData(X,r_scaler),columns=X.columns)
-
-from sklearn.model_selection import train_test_split
-#
-X, X_eval, Y, Y_eval = train_test_split(X,Y,stratify=Y,random_state=8, test_size=.2)
-print(X.shape)
-print(Y.shape)
-print(X_eval.shape)
-print(Y_eval.shape)
-'''
 #-------------------------------------------------------------
-#                       Process
+#                Process & Actual Action
 #-------------------------------------------------------------
 from sklearn.linear_model import LinearRegression
 from sklearn.linear_model import LogisticRegression
@@ -123,6 +142,7 @@ from sklearn.metrics import classification_report
 import matplotlib.pyplot as plt
 
 
+# calculate accuracy own way
 def confirmAccuracy(gt, result):
     correct=0
     for i in range(len(gt)):
@@ -130,11 +150,13 @@ def confirmAccuracy(gt, result):
             correct+=1
     return correct/len(gt)*100
 
+# evaluation predicted value using accuracy// confusion matrix// classification_report
 def evaluation(gt, predict):
     print(confirmAccuracy(gt, predict))
     print(confusion_matrix(gt, predict))
     print(classification_report(gt,predict))
 
+# predict and evaluation model.(with parameter) by evaluation dataset.
 def predict(X_train, Y_train, X_ev, Y_ev, model, param, cv=10):
     print(param, 'params')
     gridSearchModel = GridSearchCV(model, param_grid=param, cv=cv, refit=True)
@@ -149,6 +171,7 @@ def predict(X_train, Y_train, X_ev, Y_ev, model, param, cv=10):
     print("Score with EvalSet: [%f]"%(confirmAccuracy(Y_ev.values, predict)))
     evaluation(Y_ev.values,predict)
 
+# predict and evaluation model. (with parameter) by train set
 def predict2(X, Y, model, param, cv=10):
     print(param, 'params')
     gridSearchModel = GridSearchCV(model, param_grid=param, cv=cv, refit=True)
@@ -160,6 +183,9 @@ def predict2(X, Y, model, param, cv=10):
     print("Score with TrainSet: [%f]"%(confirmAccuracy(Y.values,predict)))
     evaluation(Y.values, predict)
 
+# main part of Project. excute end to end process
+# preprocessing ~ evaluation.
+############################################################################
 def end_to_end_process(scaler, na, algorithm,param , df,pca=None):
     df = handleNa(df.columns, df, work=na)
     X = df.iloc[:, :-1]
@@ -167,9 +193,12 @@ def end_to_end_process(scaler, na, algorithm,param , df,pca=None):
     X = pd.DataFrame(ScalingData(X, scaler), columns=X.columns)
     if pca is not None:
         X = pca.fit_transform(X)
-    #X, X_eval, Y, Y_eval = train_test_split(X, Y, stratify=Y, random_state=8, test_size=.2)
-    #predict(X, Y, X_eval, Y_eval, algorithm, param)
-    predict2(X,Y,algorithm,param)
+    '''
+    # analysis of train, test set  
+    X, X_eval, Y, Y_eval = train_test_split(X, Y, stratify=Y, random_state=8, test_size=.2)#using evaluation dataset.
+    predict(X, Y, X_eval, Y_eval, algorithm, param)
+    '''
+    predict2(X,Y,algorithm,param)#analysis of tstSet
 
 logistic = LogisticRegression()
 knn = KNeighborsClassifier()
@@ -193,13 +222,15 @@ knn_params={'n_neighbors':np.arange(1,5),
 bg_params={'n_estimators':np.arange(4,20,2),
            'bootstrap':[True,False],}
 
+r_scaler = RobustScaler()
 s_scaler = StandardScaler()
 m_scaler = MinMaxScaler()
-pca_2 = PCA(n_components=2)
-pca_3 = PCA(n_components=3)
+
 df = df.drop(['HasCrCard'],axis=1)
+#divide data by gender
 df_male = df[df['Gender']==1]
 df_female = df[df['Gender']==0]
+#divide data by geography
 df_france = df[df['Geography']==0]
 df_spain = df[df['Geography']==2]
 df_german = df[df['Geography']==1]
@@ -207,13 +238,25 @@ df_filled = handleNa(df.columns, df, work="mean")
 df_filled=ScalingData(df_filled,s_scaler)
 #df_x, df_y = df_filled.iloc[:,:-1], df_filled.iloc[:,-1]
 
+# configuration part
+# scaler_parameter:
+# na_parameter:
+# data: Data to perform train and test
+# pca: None_pca not applied // int_pca's k value
+####################################################################33
 scaler_paramerter = s_scaler
-na_parameter="drop"
+na_parameter="mean"
+data = df
+select_k_best(df)
+
 pca=None
-pca_parameter = 6
+pca_parameter = None
 if pca_parameter is not None:
     pca = PCA(n_components=pca_parameter)
-data = df
+
+# Stat End to End process for...
+# Logistic Regression // KNearestNeighbor // RandomForest // Bagging
+###########################################################################################
 print("------------------------------------------------------------")
 print("------------------------------------------------------------")
 print("LogisticRegression")
