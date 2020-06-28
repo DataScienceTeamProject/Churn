@@ -17,15 +17,49 @@ df = pd.read_csv('Dataset_1.csv')
 # Discrimination based on all data and categorical data
 ###################################################################################33
 
+
+#Inspection
+# Function to output na value for each column
+def foundNan(df):
+    print(df.isna().any())
+    print(df.isna().sum())
+
+# Inspection
+# Check if there are outliers through the plot.
+# There were no outliers in this project.
+##################################################
+
+def plotSeries(data,key):
+    plt.title(key)
+    plt.hist(data[key])
+    plt.show()
+
+# Preprocessing and Inspection
+# print K_best value of data.
+# Data divided into categorical data can also be checked
+#######################################
+def select_k_best(df, n):
+    X = df.iloc[:,:-1]
+    Y = df.iloc[:,-1]
+    # Num of Top feature select...
+    bestFeatures = SelectKBest(score_func=chi2, k=n)
+    fit = bestFeatures.fit(X, Y)
+    dfColumns = pd.DataFrame(X.columns)
+    dfscores = pd.DataFrame(fit.scores_)
+    featureScores = pd.concat([dfColumns, dfscores], axis=1)
+    featureScores.columns = ['Specs', 'Score']
+    print(featureScores.nlargest(n, 'Score'))
+    return featureScores.nlargest(n,'Score')
+
+
+
+#Preprocessing
 # Perform scaling according to the entered scaler.
 def ScalingData(data, scaler):
     df_scaled = scaler.fit_transform(data)
     return df_scaled
 
-# Function to output na value for each column
-def foundNan(df):
-    print(df.isna().sum())
-
+#Preprocessing
 # Encoding String value to Numeric Value
 def columnEncoding(col,df):
     for c in col:
@@ -39,6 +73,7 @@ def columnEncoding(col,df):
         print("%s is replaced %s"%(c_unique,result_unique)) # print replaced label compared origin label
     return df
 
+#Preprocessing
 # Part that determines how to handle na value of dataframe
 def handleNa(col, df,work="mean"):
     # fill na value for 'mean'
@@ -60,32 +95,12 @@ def handleNa(col, df,work="mean"):
     elif work=="drop":
         df = df.dropna(subset=col)
     return df
-# print K_best value of data.
-# Data divided into categorical data can also be checked
-#######################################
-def select_k_best(df):
-    X = df.iloc[:,:-1]
-    Y = df.iloc[:,-1]
-    # Num of Top feature select...
-    bestFeatures = SelectKBest(score_func=chi2, k='all')
-    fit = bestFeatures.fit(X, Y)
-    dfColumns = pd.DataFrame(X.columns)
-    dfscores = pd.DataFrame(fit.scores_)
-    featureScores = pd.concat([dfColumns, dfscores], axis=1)
-    featureScores.columns = ['Specs', 'Score']
-    print(featureScores.nlargest(12, 'Score'))
 
 
 print('--------------------------------------------------------------------------')
-print(df.info())#info 출력을 통해 대략적 정보를 얻음.
+print(df.info())#info Get approximate information through output.
 print(df)
-# Check if there are outliers through the plot.
-# There were no outliers in this project.
-##################################################
-def plotSeries(data,key):
-    plt.title(key)
-    plt.hist(data[key])
-    plt.show()
+# Preprocessing
 # split_df split data by specific categorical value
 # current deprecated
 ###################################################
@@ -97,6 +112,7 @@ def split_df(data,standard):
     return data_list
 
 # deprecated
+# current Not used
 ###################################################
 def visualization(data):
     print(data)
@@ -142,6 +158,7 @@ from sklearn.metrics import classification_report
 import matplotlib.pyplot as plt
 
 
+# Evaluation
 # calculate accuracy own way
 def confirmAccuracy(gt, result):
     correct=0
@@ -150,12 +167,14 @@ def confirmAccuracy(gt, result):
             correct+=1
     return correct/len(gt)*100
 
+# Evaluation
 # evaluation predicted value using accuracy// confusion matrix// classification_report
 def evaluation(gt, predict):
     print(confirmAccuracy(gt, predict))
     print(confusion_matrix(gt, predict))
     print(classification_report(gt,predict))
 
+# Analysis
 # predict and evaluation model.(with parameter) by evaluation dataset.
 def predict(X_train, Y_train, X_ev, Y_ev, model, param, cv=10):
     print(param, 'params')
@@ -170,7 +189,9 @@ def predict(X_train, Y_train, X_ev, Y_ev, model, param, cv=10):
     predict = fitted_model.predict(X_ev)
     print("Score with EvalSet: [%f]"%(confirmAccuracy(Y_ev.values, predict)))
     evaluation(Y_ev.values,predict)
+    return fitted_model
 
+#Analysis
 # predict and evaluation model. (with parameter) by train set
 def predict2(X, Y, model, param, cv=10):
     print(param, 'params')
@@ -182,7 +203,9 @@ def predict2(X, Y, model, param, cv=10):
     predict = fitted_model.predict(X)
     print("Score with TrainSet: [%f]"%(confirmAccuracy(Y.values,predict)))
     evaluation(Y.values, predict)
+    return fitted_model
 
+# Preprocess ~ Evaluation
 # main part of Project. excute end to end process
 # preprocessing ~ evaluation.
 ############################################################################
@@ -203,7 +226,7 @@ def end_to_end_process(scaler, na, algorithm,param , df,pca=None):
 logistic = LogisticRegression()
 knn = KNeighborsClassifier()
 randomForest = RandomForestClassifier()
-decisionTree=DecisionTreeClassifier(max_depth=10)
+decisionTree=DecisionTreeClassifier(max_depth=10)#10
 bagging = BaggingClassifier(decisionTree)
 rf_params = {
     'n_estimators':np.arange(4, 30, 2),
@@ -247,10 +270,20 @@ df_filled=ScalingData(df_filled,s_scaler)
 scaler_paramerter = s_scaler
 na_parameter="mean"
 data = df
-select_k_best(df)
+# Variable to decide whether to use kbest or not
+set_K_best = True
+
+if set_K_best:
+    # The number of variables can be adjusted by adjusting the second parameter
+    index = select_k_best(df,10)['Specs'].to_numpy()
+    index = index.tolist()
+    index.append("Exited")
+    data = data[index]
 
 pca=None
+# Variable determining whether to use PCA
 pca_parameter = None
+# When the PCA count is present, pca is initialized.
 if pca_parameter is not None:
     pca = PCA(n_components=pca_parameter)
 
@@ -259,14 +292,28 @@ if pca_parameter is not None:
 ###########################################################################################
 print("------------------------------------------------------------")
 print("------------------------------------------------------------")
+# Logistic regression is a model that tries to predict the distribution of a model through a function similar to linear regression.
+# However, there is a difference in predicting a function that divides classes,
+# and Logistic Regression is considered to be more suitable for classification, and Logistic Regression is applied.
+##############################################################################################
 print("LogisticRegression")
 end_to_end_process(scaler_paramerter, na_parameter, logistic, logisticParams, data,pca=pca)
 print("------------------------------------------------------------")
+# Knn is a very simple classification algorithm. I thought it was a suitable model for future ensemble learning and comparison.
+##############################################################################################
 print("K Nearest Neighbor")
 end_to_end_process(scaler_paramerter, na_parameter, knn, knn_params, data,pca=pca)
 print("------------------------------------------------------------")
+# Random Forest:
+# As a kind of ensemble learning technique
+# This is a way to reduce variance by limiting variables in bagging.
+##############################################################################################
 print("RandomForest")
 end_to_end_process(scaler_paramerter, na_parameter, randomForest, rf_params, data,pca=pca)
 print("------------------------------------------------------------")
+# Bagging:
+# This is a technique to derive results by voting based on multiple Decision Trees.
+# It has the advantage of reducing the variance of the model.
+##############################################################################################
 print('Bagging')
 end_to_end_process(scaler_paramerter, na_parameter, bagging, bg_params, data, pca=pca)
