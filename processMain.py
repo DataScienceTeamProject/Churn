@@ -11,6 +11,15 @@ from sklearn.feature_selection import chi2
 warnings.filterwarnings(action='ignore')
 
 
+
+exist_wrong_value=False
+is_plot=False
+set_K_best = False
+k_best_value = 10
+# Variable determining whether to use PCA
+pca_parameter = None #integer value or None
+
+
 df = pd.read_csv('Dataset_1.csv')
 
 # Object Selection--> Discriminate Churn
@@ -28,7 +37,6 @@ def foundNan(df):
 # Check if there are outliers through the plot.
 # There were no outliers in this project.
 ##################################################
-
 def plotSeries(data,key):
     plt.title(key)
     plt.hist(data[key])
@@ -37,7 +45,7 @@ def plotSeries(data,key):
 # Preprocessing and Inspection
 # print K_best value of data.
 # Data divided into categorical data can also be checked
-#######################################
+#################################################
 def select_k_best(df, n):
     X = df.iloc[:,:-1]
     Y = df.iloc[:,-1]
@@ -51,7 +59,33 @@ def select_k_best(df, n):
     print(featureScores.nlargest(n, 'Score'))
     return featureScores.nlargest(n,'Score')
 
-
+# Inspection
+# foundWrongValue...Wrong value may actually be subjective.
+# Outlier and Wrong Value may not be well discerned, but since there are not many, we searched for found and removed them manually.
+##################################################
+def found_wrong_value(data):
+    for idx in data:
+        print('---------------------------------------------------')
+        print(idx)
+        print(data[idx].unique())
+        print(data[idx].min())
+        print(data[idx].max())
+        print(data[idx].mean())
+        print('---------------------------------------------------')
+# Preprocess
+# In inspection, the estimated value is changed to the na value.
+####################################################
+def handle_wrong_value(data, col, value, r_value):
+    data[col]=data[col].replace(value,r_value)
+    return data
+# Preprocess
+# it Change the wrong value out of range to np.nan
+####################################################
+def handle_range_wrong_value(data, col, range):
+    f_range, b_range = range[0], range[1]
+    data[data[col]>b_range]=np.nan
+    data[data[col]<f_range]=np.nan
+    return data
 
 #Preprocessing
 # Perform scaling according to the entered scaler.
@@ -122,19 +156,14 @@ foundNan(df)#nan exists, endcoding is impossible, and the value is replaced by t
 
 
 
-df=df.drop(['Unnamed: 0','Surname'],axis=1)
+df=df.drop(['Unnamed: 0','Surname','UserIndex'],axis=1)
+print(df,'dafadf')
 # Since outlier can have a big influence on the statistical value of data, drop is performed.
 # If you handle na the entire table by drop method, when the value of another column is na, it is dropped to another row.
 #Because, drop is performed on one column each.
 df = handleNa(['Exited'],df,"drop")
-is_plot=False
-if is_plot:
-    for k in df:
-        t = handleNa([k],df,"drop")
-        plotSeries(t, k)
-
-
-df=handleNa(['Geography','Gender'],df,work="mode")#mode로 categorical 제거...
+#remove categorical feature's na value with mode
+df=handleNa(['Geography','Gender','HasCrCard','IsActiveMember'],df,work="mode")#,'HasCrCard','IsActiveMember'
 foundNan(df)
 
 for c in df:
@@ -143,6 +172,25 @@ for c in df:
 print('----------------------------------------')
 df = columnEncoding(['Geography','Gender'],df)#Encoding을 통해 String vlaue를 제거
 
+
+if is_plot:
+    data_dropped = handleNa(df.columns, df, "drop")
+    print(data_dropped.info())
+    for i in data_dropped:
+        data_dropped.boxplot(column=i)
+        plt.show()
+    #for k in df:
+    #    t = handleNa([k],df,"drop")
+    #    plotSeries(t, k)
+
+
+#deprecated
+if exist_wrong_value:
+    found_wrong_value(df)
+    df = handle_wrong_value(df, 'CreditScore',6450., 645.)
+    df = handle_wrong_value(df, 'Age', 500, 50)
+    df = handle_wrong_value(df, 'Tenure',30.,3.)
+    found_wrong_value(df)
 #-------------------------------------------------------------
 #                Process & Actual Action
 #-------------------------------------------------------------
@@ -155,7 +203,6 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import classification_report
-import matplotlib.pyplot as plt
 
 
 # Evaluation
@@ -193,7 +240,7 @@ def predict(X_train, Y_train, X_ev, Y_ev, model, param, cv=10):
 
 #Analysis
 # predict and evaluation model. (with parameter) by train set
-def predict2(X, Y, model, param, cv=10):
+def predict2(X, Y, model, param, cv=5):
     print(param, 'params')
     gridSearchModel = GridSearchCV(model, param_grid=param, cv=cv, refit=True)
     gridSearchModel.fit(X,Y)
@@ -216,12 +263,12 @@ def end_to_end_process(scaler, na, algorithm,param , df,pca=None):
     X = pd.DataFrame(ScalingData(X, scaler), columns=X.columns)
     if pca is not None:
         X = pca.fit_transform(X)
-    '''
+
     # analysis of train, test set  
     X, X_eval, Y, Y_eval = train_test_split(X, Y, stratify=Y, random_state=8, test_size=.2)#using evaluation dataset.
     predict(X, Y, X_eval, Y_eval, algorithm, param)
-    '''
-    predict2(X,Y,algorithm,param)#analysis of tstSet
+
+    #predict2(X,Y,algorithm,param)#analysis of tstSet
 
 logistic = LogisticRegression()
 knn = KNeighborsClassifier()
@@ -231,7 +278,7 @@ bagging = BaggingClassifier(decisionTree)
 rf_params = {
     'n_estimators':np.arange(4, 30, 2),
     'criterion':['gini','entropy'],
-    'max_depth':[None,1,2,3]
+    'max_depth':[None,1,2,3,4,5,6,10, 15, 20]#
 }
 logisticParams ={
     'penalty':['l1','l2','elasticnet'],
@@ -271,22 +318,18 @@ scaler_paramerter = s_scaler
 na_parameter="mean"
 data = df
 # Variable to decide whether to use kbest or not
-set_K_best = True
 
 if set_K_best:
     # The number of variables can be adjusted by adjusting the second parameter
-    index = select_k_best(df,10)['Specs'].to_numpy()
+    index = select_k_best(df,k_best_value)['Specs'].to_numpy()
     index = index.tolist()
     index.append("Exited")
     data = data[index]
 
 pca=None
-# Variable determining whether to use PCA
-pca_parameter = None
 # When the PCA count is present, pca is initialized.
 if pca_parameter is not None:
     pca = PCA(n_components=pca_parameter)
-
 # Stat End to End process for...
 # Logistic Regression // KNearestNeighbor // RandomForest // Bagging
 ###########################################################################################
@@ -309,7 +352,7 @@ print("------------------------------------------------------------")
 # This is a way to reduce variance by limiting variables in bagging.
 ##############################################################################################
 print("RandomForest")
-end_to_end_process(scaler_paramerter, na_parameter, randomForest, rf_params, data,pca=pca)
+#end_to_end_process(scaler_paramerter, na_parameter, randomForest, rf_params, data,pca=pca)
 print("------------------------------------------------------------")
 # Bagging:
 # This is a technique to derive results by voting based on multiple Decision Trees.
